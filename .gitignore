@@ -1,0 +1,52 @@
+# Build trees
+/build/
+/build-*/
+/out/
+/install/
+/_deps/
+
+# CMake artifacts
+CMakeCache.txt
+CMakeFiles/
+CMakeUserPresets.json
+cmake_install.cmake
+CTestTestfile.cmake
+Testing/
+compile_commands.json
+*.cmake.in.bak
+
+# Toolchain / IDE artifacts
+.vs/
+.vscode/
+.idea/
+*.user
+*.suo
+*.sln
+*.vcxproj
+*.vcxproj.filters
+
+# Compiler artifacts
+*.obj
+*.o
+*.pdb
+*.ilk
+*.exp
+*.lib
+*.dll
+*.exe
+*.so
+*.dylib
+*.a
+
+# Runtime debris
+*.log
+*.tmp
+*.store/
+/stores/
+/dumps/
+core
+core.*
+
+# Editor debris
+*~
+*.swp
