@@ -2,10 +2,12 @@
 // Copyright 2026 Summon Software Labs.
 // Licensed under the Apache License, Version 2.0.
 
+#include <chrono>
 #include <cstdio>
 #include <filesystem>
 #include <fstream>
 #include <string>
+#include <thread>
 #include <vector>
 
 #include "flow_offload/engine.hpp"
@@ -667,4 +669,31 @@ FOS_TEST(engine_state_survives_shutdown_without_semantic_loss) {
   before.fences.clear();
   FOS_CHECK_EQ(after, before);
   engine.shutdown();
+}
+
+FOS_TEST(compaction_waits_for_a_reader_of_the_snapshot) {
+  Sandbox sandbox("fos-snapshot-reader");
+  StoreConfig config = store_config(sandbox);
+  config.compaction_record_threshold = 1000;
+  Store store(config);
+  FOS_REQUIRE(store.open().usable);
+  FOS_REQUIRE(store.commit(sample_state(2, 4)).ok());
+  FOS_REQUIRE(store.compact(sample_state(2, 4)).ok());
+  FOS_REQUIRE(store.commit(sample_state(2, 5)).ok());
+  bool reader_opened = false;
+  bool compacted = false;
+  {
+    // An inspection of the store holds the snapshot open while the next
+    // compaction replaces it, and closes it shortly after.
+    std::ifstream reader(sandbox.snapshot(), std::ios::binary);
+    reader_opened = reader.is_open();
+    std::thread compactor(
+        [&store, &compacted] { compacted = store.compact(sample_state(2, 5)).ok(); });
+    std::this_thread::sleep_for(std::chrono::milliseconds(300));
+    reader.close();
+    compactor.join();
+  }
+  FOS_CHECK(reader_opened);
+  // The replacement waits for the reader instead of refusing the compaction.
+  FOS_CHECK(compacted);
 }

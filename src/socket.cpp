@@ -128,8 +128,15 @@ bool listen_on(const std::string& address, std::uint16_t port, std::uint16_t& bo
       continue;
     }
     int reuse = 1;
+#if defined(_WIN32)
+    // SO_REUSEADDR on Windows lets a second socket bind a port that is still
+    // listening; exclusive use makes that second bind fail instead.
+    ::setsockopt(raw, SOL_SOCKET, SO_EXCLUSIVEADDRUSE, reinterpret_cast<const char*>(&reuse),
+                 static_cast<int>(sizeof(reuse)));
+#else
     ::setsockopt(raw, SOL_SOCKET, SO_REUSEADDR, reinterpret_cast<const char*>(&reuse),
                  static_cast<int>(sizeof(reuse)));
+#endif
     if (::bind(raw, candidate->ai_addr, static_cast<int>(candidate->ai_addrlen)) == 0 &&
         ::listen(raw, static_cast<int>(kMaxConnections)) == 0) {
       break;

@@ -402,3 +402,18 @@ FOS_TEST(a_shutdown_frame_stops_the_service) {
   }
   service.shutdown();
 }
+
+FOS_TEST(a_second_service_cannot_take_a_listening_port) {
+  Engine engine;
+  FOS_REQUIRE(engine.open().ok());
+  Service first(engine);
+  FOS_REQUIRE(first.start().ok());
+  ServiceConfig taken;
+  taken.port = first.port();
+  Service second(engine, taken);
+  // Two schedulers must never share one listening port: the second bind fails.
+  FOS_CHECK(!second.start().ok());
+  second.shutdown();
+  first.shutdown();
+  engine.shutdown();
+}

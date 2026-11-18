@@ -23,9 +23,11 @@
 
 #include "flow_offload/store.hpp"
 
+#include <chrono>
 #include <cstdio>
 #include <cstring>
 #include <system_error>
+#include <thread>
 #include <vector>
 
 #include "flow_offload/canonical.hpp"
@@ -578,8 +580,31 @@ bool Store::write_atomic(const std::filesystem::path& target, std::span<const st
     failure = ReasonCode::PersistCommitFailed;
     return false;
   }
+  // While a reader has the target open (an inspection of the store, an
+  // antivirus or indexing scan) the rename fails on Windows until the reader
+  // closes the file, so it is retried for a bounded time (about 2 s). A
+  // directory in the way is not transient and fails at once.
   std::error_code ec;
-  std::filesystem::rename(temporary, target, ec);
+  for (int attempt = 0;; ++attempt) {
+    ec.clear();
+    std::filesystem::rename(temporary, target, ec);
+    if (!ec) {
+      break;
+    }
+#if defined(_WIN32)
+    // ERROR_ACCESS_DENIED, ERROR_SHARING_VIOLATION and ERROR_LOCK_VIOLATION.
+    std::error_code kind;
+    const bool transient = ec.category() == std::system_category() &&
+                           (ec.value() == 5 || ec.value() == 32 || ec.value() == 33) &&
+                           !std::filesystem::is_directory(target, kind);
+#else
+    const bool transient = false;
+#endif
+    if (!transient || attempt >= 100) {
+      break;
+    }
+    std::this_thread::sleep_for(std::chrono::milliseconds(20));
+  }
   if (ec) {
     std::filesystem::remove(temporary, ec);
     failure = ReasonCode::PersistCommitFailed;
